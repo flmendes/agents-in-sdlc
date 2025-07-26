@@ -52,7 +52,13 @@
         }
     });
 
-    // Function to render stars based on rating
+    /**
+     * Renders star rating visualization based on numeric rating value.
+     * Converts numeric rating to star symbols (★, ½, ☆) for display.
+     * 
+     * @param {number | null} rating - The numeric rating value (0-5) or null
+     * @returns {string} String representation of star rating or "Not yet rated" message
+     */
     function renderStarRating(rating: number | null): string {
         if (rating === null) return "Not yet rated";
         
