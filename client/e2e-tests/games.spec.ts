@@ -132,3 +132,167 @@ test.describe('Game Listing and Navigation', () => {
     await expect(page).toHaveTitle(/Game Details - Tailspin Toys/);
   });
 });
+
+test.describe('Game Pagination', () => {
+  test('should display pagination controls when there are multiple pages', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Check that pagination controls are visible
+    const paginationControls = page.locator('[data-testid="pagination-controls"]');
+    await expect(paginationControls).toBeVisible();
+    
+    // Check for pagination elements
+    await expect(page.locator('[data-testid="prev-page-button"]')).toBeVisible();
+    await expect(page.locator('[data-testid="next-page-button"]')).toBeVisible();
+    await expect(page.locator('[data-testid="page-info"]')).toBeVisible();
+    await expect(page.locator('[data-testid="goto-page-input"]')).toBeVisible();
+    await expect(page.locator('[data-testid="goto-page-button"]')).toBeVisible();
+    await expect(page.locator('[data-testid="page-number-button"]')).toBeVisible();
+  });
+
+  test('should navigate between pages using next/previous buttons', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Check we're on page 1
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 1 of');
+    
+    // Previous button should be disabled on first page
+    await expect(page.locator('[data-testid="prev-page-button"]')).toBeDisabled();
+    
+    // Click next button
+    await page.locator('[data-testid="next-page-button"]').click();
+    
+    // Wait for page to load
+    await page.waitForTimeout(1000);
+    
+    // Check we're now on page 2
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 2 of');
+    
+    // URL should be updated
+    await expect(page).toHaveURL('/?page=2');
+    
+    // Previous button should now be enabled
+    await expect(page.locator('[data-testid="prev-page-button"]')).toBeEnabled();
+    
+    // Click previous button to go back
+    await page.locator('[data-testid="prev-page-button"]').click();
+    
+    // Wait for page to load
+    await page.waitForTimeout(1000);
+    
+    // Check we're back on page 1
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 1 of');
+    await expect(page).toHaveURL('/');
+  });
+
+  test('should navigate to specific page using page number buttons', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Find page 2 button and click it
+    const page2Button = page.locator('[data-testid="page-number-button"][data-page="2"]');
+    await expect(page2Button).toBeVisible();
+    await page2Button.click();
+    
+    // Wait for page to load
+    await page.waitForTimeout(1000);
+    
+    // Check we're on page 2
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 2 of');
+    await expect(page).toHaveURL('/?page=2');
+  });
+
+  test('should navigate using go-to-page input', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Type page number in input
+    await page.locator('[data-testid="goto-page-input"]').fill('2');
+    
+    // Click go button
+    await page.locator('[data-testid="goto-page-button"]').click();
+    
+    // Wait for page to load
+    await page.waitForTimeout(1000);
+    
+    // Check we're on page 2
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 2 of');
+    await expect(page).toHaveURL('/?page=2');
+    
+    // Input should be cleared
+    await expect(page.locator('[data-testid="goto-page-input"]')).toHaveValue('');
+  });
+
+  test('should navigate using go-to-page input with enter key', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Type page number and press enter
+    await page.locator('[data-testid="goto-page-input"]').fill('2');
+    await page.locator('[data-testid="goto-page-input"]').press('Enter');
+    
+    // Wait for page to load
+    await page.waitForTimeout(1000);
+    
+    // Check we're on page 2
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 2 of');
+    await expect(page).toHaveURL('/?page=2');
+  });
+
+  test('should support direct URL navigation to specific pages', async ({ page }) => {
+    // Navigate directly to page 2
+    await page.goto('/?page=2');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Check we're on page 2
+    await expect(page.locator('[data-testid="page-info"]')).toContainText('Page 2 of');
+    
+    // Check that pagination controls show correct state
+    await expect(page.locator('[data-testid="prev-page-button"]')).toBeEnabled();
+  });
+
+  test('should display correct game count information', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for games to load
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Check the game count display format
+    const gameCountText = await page.locator('text=/Showing \\d+-\\d+ of \\d+ games/').textContent();
+    expect(gameCountText).toBeTruthy();
+    
+    // Navigate to page 2
+    await page.goto('/?page=2');
+    await page.waitForSelector('[data-testid="games-grid"]', { timeout: 10000 });
+    
+    // Check page 2 game count
+    const page2CountText = await page.locator('text=/Showing \\d+-\\d+ of \\d+ games/').textContent();
+    expect(page2CountText).toBeTruthy();
+  });
+
+  test('should handle invalid page numbers gracefully', async ({ page }) => {
+    // Try to navigate to a page that doesn't exist
+    await page.goto('/?page=999');
+    
+    // Wait for the page to load
+    await page.waitForTimeout(3000);
+    
+    // The page should load without crashing and show no games
+    // or redirect to a valid page
+    await expect(page).toHaveTitle('Tailspin Toys - Crowdfunding your new favorite game!');
+  });
+});

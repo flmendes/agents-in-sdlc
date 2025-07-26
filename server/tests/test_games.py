@@ -111,10 +111,26 @@ class TestGamesRoutes(unittest.TestCase):
         
         # Assert
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(data), len(self.TEST_DATA["games"]))
+        
+        # Check pagination structure
+        self.assertIn('data', data)
+        self.assertIn('page', data)
+        self.assertIn('per_page', data)
+        self.assertIn('total', data)
+        self.assertIn('total_pages', data)
+        
+        # Check pagination values
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['per_page'], 20)
+        self.assertEqual(data['total'], len(self.TEST_DATA["games"]))
+        self.assertEqual(data['total_pages'], 1)
+        
+        # Check games data
+        games_list = data['data']
+        self.assertEqual(len(games_list), len(self.TEST_DATA["games"]))
         
         # Verify all games using loop instead of manual testing
-        for i, game_data in enumerate(data):
+        for i, game_data in enumerate(games_list):
             test_game = self.TEST_DATA["games"][i]
             test_publisher = self.TEST_DATA["publishers"][test_game["publisher_index"]]
             test_category = self.TEST_DATA["categories"][test_game["category_index"]]
@@ -132,18 +148,29 @@ class TestGamesRoutes(unittest.TestCase):
         
         # Assert
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(data, list)
-        self.assertEqual(len(data), len(self.TEST_DATA["games"]))
+        
+        # Check pagination structure
+        self.assertIn('data', data)
+        self.assertIn('page', data)
+        self.assertIn('per_page', data)
+        self.assertIn('total', data)
+        self.assertIn('total_pages', data)
+        
+        # Check games data structure
+        games_list = data['data']
+        self.assertIsInstance(games_list, list)
+        self.assertEqual(len(games_list), len(self.TEST_DATA["games"]))
         
         required_fields = ['id', 'title', 'description', 'publisher', 'category', 'starRating']
         for field in required_fields:
-            self.assertIn(field, data[0])
+            self.assertIn(field, games_list[0])
 
     def test_get_game_by_id_success(self) -> None:
         """Test successful retrieval of a single game by ID"""
         # Get the first game's ID from the list endpoint
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Act
@@ -157,6 +184,69 @@ class TestGamesRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(data['title'], first_game["title"])
         self.assertEqual(data['publisher']['name'], first_publisher["name"])
+
+    def test_get_games_pagination_parameters(self) -> None:
+        """Test pagination with specific page and per_page parameters"""
+        # Test page 1 with per_page 1
+        response = self.client.get(f'{self.GAMES_API_PATH}?page=1&per_page=1')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['per_page'], 1)
+        self.assertEqual(data['total'], len(self.TEST_DATA["games"]))
+        self.assertEqual(data['total_pages'], len(self.TEST_DATA["games"]))
+        self.assertEqual(len(data['data']), 1)
+        
+        # Test page 2 with per_page 1
+        response = self.client.get(f'{self.GAMES_API_PATH}?page=2&per_page=1')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['page'], 2)
+        self.assertEqual(data['per_page'], 1)
+        self.assertEqual(len(data['data']), 1)
+        
+        # Verify different games are returned on different pages
+        first_page_response = self.client.get(f'{self.GAMES_API_PATH}?page=1&per_page=1')
+        first_page_data = self._get_response_data(first_page_response)
+        
+        self.assertNotEqual(data['data'][0]['id'], first_page_data['data'][0]['id'])
+
+    def test_get_games_pagination_invalid_parameters(self) -> None:
+        """Test pagination with invalid parameters"""
+        # Test invalid page (less than 1)
+        response = self.client.get(f'{self.GAMES_API_PATH}?page=0')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['page'], 1)  # Should default to 1
+        
+        # Test invalid per_page (less than 1)
+        response = self.client.get(f'{self.GAMES_API_PATH}?per_page=0')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['per_page'], 20)  # Should default to 20
+        
+        # Test per_page too large (over 100)
+        response = self.client.get(f'{self.GAMES_API_PATH}?per_page=200')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['per_page'], 20)  # Should default to 20
+
+    def test_get_games_pagination_out_of_bounds(self) -> None:
+        """Test pagination with page number out of bounds"""
+        # Test page beyond available data
+        response = self.client.get(f'{self.GAMES_API_PATH}?page=999&per_page=1')
+        data = self._get_response_data(response)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['page'], 999)
+        self.assertEqual(len(data['data']), 0)  # No data for page out of bounds
+        self.assertEqual(data['total'], len(self.TEST_DATA["games"]))
+        self.assertEqual(data['total_pages'], len(self.TEST_DATA["games"]))
         
     def test_get_game_by_id_not_found(self) -> None:
         """Test retrieval of a non-existent game by ID"""
@@ -305,7 +395,8 @@ class TestGamesRoutes(unittest.TestCase):
         """Test successful update of an existing game"""
         # Get the first game's ID
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Arrange
@@ -346,7 +437,8 @@ class TestGamesRoutes(unittest.TestCase):
         """Test game update with non-existent publisher"""
         # Get the first game's ID
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Arrange
@@ -368,7 +460,8 @@ class TestGamesRoutes(unittest.TestCase):
         """Test game update with non-existent category"""
         # Get the first game's ID
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Arrange
@@ -390,7 +483,8 @@ class TestGamesRoutes(unittest.TestCase):
         """Test game update with validation errors"""
         # Get the first game's ID
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Arrange - description too short
@@ -413,7 +507,8 @@ class TestGamesRoutes(unittest.TestCase):
         """Test successful deletion of an existing game"""
         # Get the first game's ID
         response = self.client.get(self.GAMES_API_PATH)
-        games = self._get_response_data(response)
+        games_data = self._get_response_data(response)
+        games = games_data['data']
         game_id = games[0]['id']
         
         # Act
