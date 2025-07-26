@@ -19,13 +19,39 @@ def get_games_base_query() -> Query:
 
 @games_bp.route('/api/games', methods=['GET'])
 def get_games() -> Response:
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    # Validate pagination parameters
+    if page < 1:
+        page = 1
+    if per_page < 1 or per_page > 100:  # Limit max per_page to prevent abuse
+        per_page = 20
+    
     # Use the base query for all games
-    games_query = get_games_base_query().all()
+    base_query = get_games_base_query()
+    
+    # Get total count
+    total = base_query.count()
+    
+    # Apply pagination
+    games_query = base_query.offset((page - 1) * per_page).limit(per_page).all()
     
     # Convert the results using the model's to_dict method
     games_list = [game.to_dict() for game in games_query]
     
-    return jsonify(games_list)
+    # Calculate pagination metadata
+    total_pages = (total + per_page - 1) // per_page  # Ceiling division
+    
+    # Return paginated response
+    return jsonify({
+        'data': games_list,
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'total_pages': total_pages
+    })
 
 @games_bp.route('/api/games/<int:id>', methods=['GET'])
 def get_game(id: int) -> tuple[Response, int] | Response:
